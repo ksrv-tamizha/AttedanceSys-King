@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student ID Portal</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e272e; color: #f5f6fa; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh;}
+    .container { width: 100%; max-width: 500px; background: #2f3640; padding: 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); text-align: center; }
+    h2 { margin-top: 0; color: #00a8ff; font-size: 26px; }
+    p.subtitle { color: #7f8fa6; margin-bottom: 25px; font-size: 15px; }
+    
+    .form-group { margin-bottom: 20px; text-align: left; }
+    label { display: block; margin-bottom: 8px; font-weight: 600; color: #dcdde1; font-size: 14px; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 12px; border: 1px solid #353b48; border-radius: 6px; background: #1e272e; color: white; font-size: 15px; box-sizing: border-box; }
+    input[type="file"] { padding: 10px; background: #353b48; cursor: pointer; }
+    
+    .btn { width: 100%; padding: 16px; color: white; border: none; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s; background-color: #00a8ff; }
+    .btn:hover { background-color: #0097e6; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    
+    .msg-box { min-height: 60px; padding: 15px; border-radius: 6px; font-size: 16px; font-weight: bold; margin-top: 25px; display: none; align-items: center; justify-content: center; text-align: center; word-break: break-word; }
+    .msg-box.success { display: flex; background-color: #4cd137; color: #1e272e; }
+    .msg-box.error { display: flex; background-color: #e84118; color: white; }
+    .msg-box.processing { display: flex; background-color: #fbc531; color: #1e272e; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Generate Digital ID</h2>
+  <p class="subtitle">Enter your details below to receive your official QR Code ID card via email.</p>
+
+  <form id="form-id" onsubmit="handleID(event)">
+    <div class="form-group">
+      <label>Enrollment Number (e.g., ENR-001)</label>
+      <input type="text" id="id-number" placeholder="Enter exactly as provided" required>
+    </div>
+    <div class="form-group">
+      <label>Upload Clear Headshot (Square photo)</label>
+      <input type="file" id="id-photo" accept="image/png, image/jpeg" required>
+    </div>
+    <button type="submit" class="btn" id="submit-id">Generate & Email My ID</button>
+  </form>
+  
+  <div id="msg-id" class="msg-box"></div>
+</div>
+
+<script>
+  const API_URL = "https://script.google.com/macros/s/AKfycbzxXXH9rWgHjOTqpNhkRlqrDNF-ks8JH9NhBit5HzlokBUR6O11lQ-f6rH-eSyVDXFjhQ/exec";
+  
+  async function callMasterAPI(action, data, buttonId) {
+    const btn = document.getElementById(buttonId);
+    const originalText = btn.innerText;
+    btn.innerText = "Processing Please Wait...";
+    btn.disabled = true;
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST', redirect: 'follow',
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: action, data: data })
+      });
+      const result = await response.json();
+      btn.innerText = originalText;
+      btn.disabled = false;
+      return result;
+    } catch (error) {
+      btn.innerText = originalText;
+      btn.disabled = false;
+      return { success: false, error: "Network Error. Please try again." };
+    }
+  }
+
+  async function handleID(event) {
+    event.preventDefault();
+    const msgBox = document.getElementById('msg-id');
+    const fileInput = document.getElementById('id-photo');
+    const enrollNumber = document.getElementById('id-number').value.trim();
+
+    if (!fileInput.files.length) return alert("Please select a photo.");
+    
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = "Generating PDF & sending email... (this takes 5-10 seconds)";
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async function() {
+      const base64String = reader.result.split(',')[1]; 
+      
+      const data = {
+        enrollNumber: enrollNumber,
+        fileBase64: base64String,
+        fileMimeType: file.type
+      };
+
+      const res = await callMasterAPI("generateID", data, "submit-id");
+      
+      if(res.success) {
+        msgBox.className = "msg-box success";
+        msgBox.innerHTML = `✅ Success! Check your email for your ID card.`;
+        document.getElementById('form-id').reset();
+      } else {
+        msgBox.className = "msg-box error";
+        msgBox.innerHTML = `❌ ${res.error}`;
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+</script>
+
+</body>
+</html>

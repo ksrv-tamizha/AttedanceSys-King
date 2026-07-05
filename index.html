@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Hub - AutoScript</title>
+
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e272e; color: #f5f6fa; margin: 0; padding: 0; display: flex; justify-content: center; min-height: 100vh; flex-direction: column; align-items: center;}
+    .container { width: 100%; max-width: 600px; background: #2f3640; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.4); position: relative; box-sizing: border-box; }
+    h2 { margin-top: 0; color: #00a8ff; text-align: center; font-size: 24px; }
+    
+    #login-screen { max-width: 400px; text-align: center; margin: auto; }
+    #dashboard-screen { display: none; width: 100%; margin: 40px auto;}
+    
+    .nav-tabs { display: flex; justify-content: space-between; margin-bottom: 25px; background: #1e272e; border-radius: 8px; padding: 5px; }
+    .nav-tabs button { flex: 1; padding: 12px; background: transparent; color: #7f8fa6; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+    .nav-tabs button.active { background: #00a8ff; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    
+    .view-section { display: none; }
+    .view-section.active { display: block; animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .form-group { margin-bottom: 15px; text-align: left; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; color: #dcdde1; font-size: 14px; }
+    input[type="text"], input[type="number"], input[type="email"], select, input[type="password"], input[type="tel"], input[type="date"] { width: 100%; padding: 12px; border: 1px solid #353b48; border-radius: 6px; background: #1e272e; color: white; font-size: 15px; box-sizing: border-box; }
+    
+    .btn { width: 100%; padding: 14px; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 10px; }
+    .btn-blue { background-color: #00a8ff; }
+    .btn-blue:hover { background-color: #0097e6; }
+    .btn-green { background-color: #4cd137; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    
+    .msg-box { min-height: 50px; padding: 15px; border-radius: 6px; font-size: 16px; font-weight: bold; margin-top: 20px; display: none; align-items: center; justify-content: center; text-align: center; word-break: break-word; }
+    .msg-box.success { display: flex; background-color: #4cd137; color: #1e272e; }
+    .msg-box.error { display: flex; background-color: #e84118; color: white; }
+    .msg-box.processing { display: flex; background-color: #fbc531; color: #1e272e; }
+
+    #reader { width: 100%; background: #000; border-radius: 8px; overflow: hidden; margin-top: 15px; border: 2px solid #353b48; display: none; }
+    
+    #scan-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(30, 39, 46, 0.98); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; backdrop-filter: blur(8px); margin: 0; }
+    #scan-overlay h3 { color: #4cd137; font-size: 28px; margin-bottom: 10px; }
+    #scan-overlay p { font-size: 18px; color: white; margin-bottom: 30px; }
+  </style>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+
+<!-- THE LOGIN SCREEN -->
+<div id="login-screen" class="container">
+  <h2>Admin Access</h2>
+  <div class="form-group">
+    <input type="password" id="admin-pin" placeholder="Enter Admin PIN" onkeypress="if(event.keyCode==13) unlockUI()">
+  </div>
+  <button class="btn btn-blue" onclick="unlockUI()">Unlock Dashboard</button>
+</div>
+
+<!-- THE MAIN DASHBOARD -->
+<div id="dashboard-screen">
+  <div class="container">
+    <h2>Admin Dashboard</h2>
+
+    <div class="nav-tabs">
+      <button id="btn-enroll" class="active" onclick="switchTab('enroll')">Enrollment</button>
+      <button id="btn-scan" onclick="switchTab('scan')">QR Scanner</button>
+      <button id="btn-manage" onclick="switchTab('manage')">Manage</button>
+      <button id="btn-details" onclick="switchTab('details')">Profile</button>
+    </div>
+
+    <!-- ENROLLMENT VIEW -->
+    <div id="view-enroll" class="view-section active">
+      <form id="form-enroll" onsubmit="handleEnroll(event)">
+        <div class="form-group"><label>Student Name</label><input type="text" id="en-name" required></div>
+        <div class="form-group"><label>Mobile Number</label><input type="tel" id="en-mobile" placeholder="e.g. 9876543210" required></div>
+        <div class="form-group"><label>Course</label>
+          <!-- Options are now fetched dynamically from Google Sheets -->
+          <select id="en-course" required>
+            <option value="">Loading courses...</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Email Address</label><input type="email" id="en-email" required></div>
+        <button type="submit" class="btn btn-blue" id="submit-enroll">Register Student</button>
+      </form>
+      <div id="msg-enroll" class="msg-box"></div>
+    </div>
+
+    <!-- SCANNER VIEW -->
+    <div id="view-scan" class="view-section">
+      <button class="btn btn-green" id="btn-start-camera" onclick="startScanner()">📸 Start Scanner</button>
+      
+      <div style="position: relative;">
+        <div id="reader"></div>
+      </div>
+      
+      <div style="margin-top: 20px; border-top: 1px solid #7f8fa6; padding-top: 20px;">
+        <label>Manual Override</label>
+        <div style="display: flex; gap: 10px;">
+          <!-- Placeholder updated to reflect the new shortcut -->
+          <input type="text" id="scan-manual" placeholder="e.g. 001 or ENR-001" onkeypress="if(event.keyCode==13) processScanManual()">
+          <button class="btn btn-blue" style="margin-top: 0; width: auto;" onclick="processScanManual()">Log</button>
+        </div>
+      </div>
+      <div id="msg-scan" class="msg-box"></div>
+    </div>
+
+    <!-- PROFILE DETAILS VIEW -->
+    <div id="view-details" class="view-section">
+      <div class="form-group">
+        <label>Enter ID or Scan</label>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="detail-id" placeholder="001 or ENR-001" onkeypress="if(event.keyCode==13) fetchDetails()">
+          <button class="btn btn-blue" style="margin-top: 0; width: auto;" onclick="fetchDetails()">Search</button>
+          <button class="btn btn-green" style="margin-top: 0; width: auto;" onclick="startDetailScanner()">📷</button>
+        </div>
+      </div>
+      
+      <div id="detail-reader" style="width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 15px; display: none;"></div>
+      <div id="msg-details" class="msg-box"></div>
+      
+      <div id="detail-card" style="display: none; background: #1e272e; padding: 20px; border-radius: 8px; margin-top: 15px; text-align: left; border: 1px solid #353b48;">
+        <div style="text-align: center; margin-bottom: 15px;">
+          <img id="d-photo" src="" style="width: 130px; height: 150px; border-radius: 8px; object-fit: cover; border: 2px solid #00a8ff;">
+          <h3 id="d-name" style="margin: 10px 0 5px 0; color: white;"></h3>
+          <span id="d-enr" style="color: #00a8ff; font-weight: bold;"></span>
+        </div>
+        <ul style="list-style: none; padding: 0; color: #dcdde1; line-height: 1.8; font-size: 15px;">
+          <li><b>Course:</b> <span id="d-course"></span></li>
+          <li><b>Join Date:</b> <span id="d-join"></span></li>
+          <hr style="border-color: #353b48; margin: 10px 0;">
+          <li><b>Total Possible Days:</b> <span id="d-possible"></span></li>
+          <li><b>Days Present:</b> <span id="d-present" style="color: #00a8ff; font-weight: bold;"></span></li>
+          <li><b>Holidays & Sundays:</b> <span id="d-holidays"></span></li>
+          <li><b>Total Leave (Absent):</b> <span id="d-absent" style="color: #e84118; font-weight: bold;"></span></li>
+          <hr style="border-color: #353b48; margin: 10px 0;">
+          <li><b>Attendance Rate:</b> <span id="d-pct" style="color: #4cd137; font-weight: bold; font-size: 18px;"></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- MANAGEMENT VIEW -->
+    <div id="view-manage" class="view-section">
+      
+      <div style="background: #1e272e; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #fbc531; margin-top: 0;">Mark Student Completed</h3>
+        <div class="form-group">
+          <label>Enrollment Number</label>
+          <input type="text" id="comp-id" placeholder="e.g. 001 or ENR-001">
+        </div>
+        <div class="form-group">
+          <label>Completion Date</label>
+          <input type="date" id="comp-date">
+        </div>
+        <button class="btn btn-blue" id="btn-comp" onclick="handleMarkCompleted()">Submit Completion</button>
+        <div id="msg-comp" class="msg-box"></div>
+      </div>
+
+      <div style="background: #1e272e; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="color: #00a8ff; margin-top: 0;">Mark Individual Leave</h3>
+        <div class="form-group">
+          <label>Enrollment Number</label>
+          <input type="text" id="leave-id" placeholder="e.g. 001 or ENR-001">
+        </div>
+        <div class="form-group">
+          <label>Leave Date</label>
+          <input type="date" id="leave-date">
+        </div>
+        <button class="btn btn-blue" id="btn-leave" onclick="handleMarkLeave()">Add Leave</button>
+        <div id="msg-leave" class="msg-box"></div>
+      </div>
+
+      <div style="background: #1e272e; padding: 15px; border-radius: 8px;">
+        <h3 style="color: #4cd137; margin-top: 0;">Mark Holiday / Cancelled Class</h3>
+        <div class="form-group">
+          <label>Holiday Date</label>
+          <input type="date" id="hol-date">
+        </div>
+        <button class="btn btn-green" id="btn-hol" onclick="handleMarkHoliday()">Add Holiday</button>
+        <div id="msg-hol" class="msg-box"></div>
+      </div>
+
+    </div>
+
+  </div> <!-- End Container -->
+</div> <!-- End Dashboard Screen -->
+
+<!-- SCAN OVERLAY (Must remain outside of the tabs container) -->
+<div id="scan-overlay">
+  <h3 id="overlay-status">✅ Success!</h3>
+  <p id="overlay-text">Student Logged Present</p>
+  <button class="btn btn-blue" onclick="unlockScanner()" style="font-size: 20px; padding: 20px;">Tap to Scan Next</button>
+</div>
+
+<script>
+  const API_URL = "https://script.google.com/macros/s/AKfycbzxXXH9rWgHjOTqpNhkRlqrDNF-ks8JH9NhBit5HzlokBUR6O11lQ-f6rH-eSyVDXFjhQ/exec";
+  let activeSecret = ""; 
+
+  // --- FETCH DYNAMIC COURSES ON LOAD ---
+  window.onload = async function() {
+    const res = await callMasterAPI("getCourses", {}, null);
+    if (res.success && res.courses) {
+      const select = document.getElementById('en-course');
+      select.innerHTML = '<option value="">Select a Course...</option>';
+      res.courses.forEach(course => {
+        const opt = document.createElement('option');
+        opt.value = course; opt.innerHTML = course;
+        select.appendChild(opt);
+      });
+    }
+  };
+
+  function unlockUI() {
+    const pin = document.getElementById('admin-pin').value;
+    if (pin.trim() !== "") {
+      activeSecret = pin; 
+      document.getElementById('login-screen').style.display = "none";
+      document.getElementById('dashboard-screen').style.display = "block";
+      
+      // Auto-set today's date in the date pickers upon login
+      document.getElementById('comp-date').valueAsDate = new Date();
+      document.getElementById('hol-date').valueAsDate = new Date();
+      document.getElementById('leave-date').valueAsDate = new Date();
+    }
+  }
+
+  function switchTab(tab) {
+    ['enroll', 'scan', 'manage', 'details'].forEach(t => {
+      document.getElementById(`btn-${t}`).classList.remove('active');
+      const view = document.getElementById(`view-${t}`);
+      if(view) view.classList.remove('active');
+    });
+    document.getElementById(`btn-${tab}`).classList.add('active');
+    document.getElementById(`view-${tab}`).classList.add('active');
+  }
+
+  // --- STREAMING_CHUNK:Bulletproof API Caller ---
+  async function callMasterAPI(action, data, buttonId) {
+    const btn = buttonId ? document.getElementById(buttonId) : null;
+    if(btn) { btn.disabled = true; }
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST', redirect: 'follow',
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: action, data: data, secret: activeSecret })
+      });
+      
+      // Robust error handling to prevent silent freezing
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch(e) {
+        throw new Error("Backend connection failed or script needs authorization.");
+      }
+
+      if(btn) { btn.disabled = false; }
+      return result;
+    } catch (error) {
+      if(btn) { btn.disabled = false; }
+      return { success: false, error: error.message || "Network Error." };
+    }
+  }
+
+  // --- STREAMING_CHUNK:Enrollment Logic ---
+  async function handleEnroll(event) {
+    event.preventDefault();
+    const msgBox = document.getElementById('msg-enroll');
+    const btn = document.getElementById('submit-enroll');
+    const originalText = btn.innerText;
+    
+    btn.innerText = "Processing...";
+    msgBox.style.display = "flex";
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = "Saving...";
+
+    const res = await callMasterAPI("enrollStudent", {
+      name: document.getElementById('en-name').value.trim(),
+      mobile: document.getElementById('en-mobile').value.trim(),
+      course: document.getElementById('en-course').value,
+      email: document.getElementById('en-email').value.trim()
+    }, "submit-enroll");
+    
+    btn.innerText = originalText;
+    if(res.success) {
+      msgBox.className = "msg-box success";
+      msgBox.innerHTML = `✅ ${res.name} Enrolled as ${res.id}`;
+      document.getElementById('form-enroll').reset();
+    } else {
+      msgBox.className = "msg-box error";
+      msgBox.innerHTML = `❌ ${res.error}`;
+      if (res.error.includes("Unauthorized")) {
+         setTimeout(() => { location.reload(); }, 2000);
+      }
+    }
+  }
+
+  // --- STREAMING_CHUNK:Scanner Logic ---
+  let html5QrCode;
+  let isScanning = false;
+
+  function startScanner() {
+    document.getElementById('reader').style.display = "block";
+    document.getElementById('btn-start-camera').style.display = "none";
+    
+    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" }, 
+      { fps: 10, qrbox: { width: 250, height: 250 }, formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] },
+      onScanSuccess
+    ).catch(err => {
+      document.getElementById('msg-scan').style.display = "flex";
+      document.getElementById('msg-scan').className = "msg-box error";
+      document.getElementById('msg-scan').innerHTML = "❌ Camera Error.";
+    });
+  }
+
+  function onScanSuccess(decodedText) {
+    if (isScanning) return; 
+    isScanning = true; 
+    processAttendance(decodedText.trim());
+  }
+
+  function processScanManual() {
+    let manualId = document.getElementById('scan-manual').value.trim();
+    
+    if(manualId && !isScanning) {
+      isScanning = true;
+      
+      // Smart Auto-Formatter
+      if (!manualId.toUpperCase().startsWith("ENR-") && !isNaN(manualId)) {
+        manualId = "ENR-" + manualId.padStart(3, '0');
+      } else {
+        manualId = manualId.toUpperCase();
+      }
+
+      processAttendance(manualId);
+      document.getElementById('scan-manual').value = "";
+    }
+  }
+
+  async function processAttendance(enrollId) {
+    const msgBox = document.getElementById('msg-scan');
+    msgBox.style.display = "flex";
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = `Logging ${enrollId}...`;
+
+    const res = await callMasterAPI("scanAttendance", { enrollNumber: enrollId }, null);
+    
+    msgBox.style.display = "none";
+    const overlay = document.getElementById('scan-overlay');
+    const overlayStatus = document.getElementById('overlay-status');
+    const overlayText = document.getElementById('overlay-text');
+    
+    overlay.style.display = "flex";
+    
+    if(res.success) {
+      overlayStatus.innerText = "✅ Success!";
+      overlayStatus.style.color = "#4cd137";
+      overlayText.innerText = `${res.name} Logged Present\n(${res.id})`;
+      playBeep();
+    } else {
+      overlayStatus.innerText = "❌ Error!";
+      overlayStatus.style.color = "#e84118";
+      overlayText.innerText = res.error;
+      if (res.error.includes("Unauthorized")) {
+         setTimeout(() => { location.reload(); }, 2000);
+      }
+    }
+  }
+
+  function unlockScanner() {
+    document.getElementById('scan-overlay').style.display = "none";
+    setTimeout(() => { isScanning = false; }, 500); 
+  }
+
+  function playBeep() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.value = 1000; gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      osc.start(); setTimeout(() => osc.stop(), 150);
+    } catch (e) {}
+  }
+
+  // --- STREAMING_CHUNK:Management Tabs Logic ---
+  async function handleMarkCompleted() {
+    let manualId = document.getElementById('comp-id').value.trim();
+    const compDate = document.getElementById('comp-date').value;
+    const msgBox = document.getElementById('msg-comp');
+    
+    if (!manualId || !compDate) return alert("Please fill all fields.");
+
+    if (!manualId.toUpperCase().startsWith("ENR-") && !isNaN(manualId)) {
+      manualId = "ENR-" + manualId.padStart(3, '0');
+    } else {
+      manualId = manualId.toUpperCase();
+    }
+
+    msgBox.style.display = "flex";
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = "Processing...";
+
+    const res = await callMasterAPI("markCompleted", { enrollNumber: manualId, date: compDate }, "btn-comp");
+    
+    if(res.success) {
+      msgBox.className = "msg-box success";
+      msgBox.innerHTML = `✅ ${manualId} successfully marked completed!`;
+      document.getElementById('comp-id').value = "";
+    } else {
+      msgBox.className = "msg-box error";
+      msgBox.innerHTML = `❌ ${res.error}`;
+    }
+  }
+
+  async function handleMarkLeave() {
+    let manualId = document.getElementById('leave-id').value.trim();
+    const leaveDate = document.getElementById('leave-date').value;
+    const msgBox = document.getElementById('msg-leave');
+    
+    if (!manualId || !leaveDate) return alert("Please fill all fields.");
+
+    if (!manualId.toUpperCase().startsWith("ENR-") && !isNaN(manualId)) {
+      manualId = "ENR-" + manualId.padStart(3, '0');
+    } else {
+      manualId = manualId.toUpperCase();
+    }
+
+    msgBox.style.display = "flex";
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = "Processing...";
+
+    const res = await callMasterAPI("markLeave", { enrollNumber: manualId, date: leaveDate }, "btn-leave");
+    
+    if(res.success) {
+      msgBox.className = "msg-box success";
+      msgBox.innerHTML = `✅ Leave successfully logged for ${manualId}!`;
+      document.getElementById('leave-id').value = "";
+    } else {
+      msgBox.className = "msg-box error";
+      msgBox.innerHTML = `❌ ${res.error}`;
+    }
+  }
+
+  async function handleMarkHoliday() {
+    const holDate = document.getElementById('hol-date').value;
+    const msgBox = document.getElementById('msg-hol');
+    
+    if (!holDate) return alert("Please select a date.");
+
+    msgBox.style.display = "flex";
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = "Processing...";
+
+    const res = await callMasterAPI("markHoliday", { date: holDate }, "btn-hol");
+    
+    if(res.success) {
+      msgBox.className = "msg-box success";
+      msgBox.innerHTML = `✅ Holiday successfully logged for ${holDate}!`;
+    } else {
+      msgBox.className = "msg-box error";
+      msgBox.innerHTML = `❌ ${res.error}`;
+    }
+  }
+
+  // --- STREAMING_CHUNK:Profile Details Logic ---
+  async function fetchDetails(scannedId = null) {
+    let manualId = scannedId || document.getElementById('detail-id').value.trim();
+    const msgBox = document.getElementById('msg-details');
+    const card = document.getElementById('detail-card');
+    
+    if (!manualId) return;
+
+    if (!manualId.toUpperCase().startsWith("ENR-") && !isNaN(manualId)) {
+      manualId = "ENR-" + manualId.padStart(3, '0');
+    } else {
+      manualId = manualId.toUpperCase();
+    }
+    
+    document.getElementById('detail-id').value = manualId;
+    card.style.display = "none";
+    msgBox.style.display = "flex";
+    msgBox.className = "msg-box processing";
+    msgBox.innerHTML = "Fetching record...";
+
+    const res = await callMasterAPI("getStudentDetails", { enrollNumber: manualId }, null);
+    
+    if(res.success) {
+      msgBox.style.display = "none";
+      card.style.display = "block";
+      
+      // Google Drive Embed Bypass
+      let photoLink = res.data.photo;
+      if(photoLink.includes("uc?export=view&id=")) {
+        photoLink = photoLink.replace("uc?export=view&id=", "thumbnail?sz=w300&id=");
+      }
+      
+      document.getElementById('d-photo').src = photoLink;
+      document.getElementById('d-name').innerText = res.data.name;
+      document.getElementById('d-enr').innerText = res.data.enrollNumber;
+      document.getElementById('d-course').innerText = res.data.course;
+      document.getElementById('d-join').innerText = res.data.joinDate;
+      document.getElementById('d-possible').innerText = res.data.totalPossible;
+      document.getElementById('d-present').innerText = res.data.daysPresent;
+      document.getElementById('d-holidays').innerText = res.data.holidays;
+      document.getElementById('d-absent').innerText = res.data.totalAbsent;
+      document.getElementById('d-pct').innerText = res.data.attendancePct;
+    } else {
+      msgBox.className = "msg-box error";
+      msgBox.innerHTML = `❌ ${res.error}`;
+      if (res.error.includes("Unauthorized")) setTimeout(() => { location.reload(); }, 2000);
+    }
+  }
+
+  let detailScanner;
+  function startDetailScanner() {
+    document.getElementById('detail-reader').style.display = "block";
+    detailScanner = new Html5Qrcode("detail-reader");
+    detailScanner.start(
+      { facingMode: "environment" }, 
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => {
+        detailScanner.stop();
+        document.getElementById('detail-reader').style.display = "none";
+        fetchDetails(decodedText.trim());
+      }
+    );
+  }
+</script>
+</body>
+</html>
