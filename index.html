@@ -86,6 +86,12 @@
 
     <!-- SCANNER VIEW -->
     <div id="view-scan" class="view-section">
+      <!-- NEW: Attendance Date Picker -->
+      <div class="form-group" style="margin-bottom: 15px;">
+        <label>Attendance Date</label>
+        <input type="date" id="scan-date">
+      </div>
+
       <button class="btn btn-green" id="btn-start-camera" onclick="startScanner()">📸 Start Scanner</button>
       
       <div style="position: relative;">
@@ -215,10 +221,12 @@
       document.getElementById('login-screen').style.display = "none";
       document.getElementById('dashboard-screen').style.display = "block";
       
+      
       // Auto-set today's date in the date pickers upon login
       document.getElementById('comp-date').valueAsDate = new Date();
       document.getElementById('hol-date').valueAsDate = new Date();
       document.getElementById('leave-date').valueAsDate = new Date();
+      document.getElementById('scan-date').valueAsDate = new Date();
     }
   }
 
@@ -339,11 +347,12 @@
 
   async function processAttendance(enrollId) {
     const msgBox = document.getElementById('msg-scan');
-    msgBox.style.display = "flex";
     msgBox.className = "msg-box processing";
     msgBox.innerHTML = `Logging ${enrollId}...`;
 
-    const res = await callMasterAPI("scanAttendance", { enrollNumber: enrollId }, null);
+    const scanDate = document.getElementById('scan-date').value;
+
+    const res = await callMasterAPI("scanAttendance", { enrollNumber: enrollId, date: scanDate }, null);
     
     msgBox.style.display = "none";
     const overlay = document.getElementById('scan-overlay');
